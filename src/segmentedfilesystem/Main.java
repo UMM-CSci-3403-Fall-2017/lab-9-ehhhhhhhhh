@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -69,6 +70,13 @@ public class Main {
     		}
     	}
     	
+    	filterData(packetArray);
+    	ArrayList<ArrayList<DatagramPacket>> assembledFiles = assembleFiles(packetArray, headerArray);
+    	sortFiles(assembledFiles);
+    	
+    	for (int i = 0; i < assembledFiles.size(); i++) {
+    		writeFile(assembledFiles.get(i), headerArray.get(i));
+    	}
     	
     	
     }
@@ -142,7 +150,47 @@ public class Main {
     	return sortedFiles;
     }
     
-    private static void writeFile
+    private static void writeFile(ArrayList<DatagramPacket> file, DatagramPacket header) {
+    	ArrayList<Byte> byteList = new ArrayList<Byte>();
+    	ArrayList<Byte> fileNameByteList = new ArrayList<Byte>();
+    	
+    	for (DatagramPacket p : file) {
+    		for (int i = 4; i < p.getData().length; i++) {
+    			byteList.add(p.getData()[i]);
+    		}
+    	}
+    	
+    	for (int i = 2; i < header.getData().length; i++) {
+    		fileNameByteList.add(header.getData()[i]);
+    	}
+    	
+    	byte[] b = new byte[byteList.size()];
+    	byte[] h = new byte[fileNameByteList.size()]
+        		for (int i = 4; i < p.getData().length; i++) {;
+    	
+    	String fileName = new String(h);
+    	
+    	//Credit for this file to StackOverflow question
+    	//https://stackoverflow.com/questions/4350084/byte-to-file-in-java
+    	//Asker
+    	//https://stackoverflow.com/users/432539/elcool
+    	//Edited by
+    	//https://stackoverflow.com/users/2598/jjnguy
+    	//Answerer
+    	//https://stackoverflow.com/users/131433/bmargulies
+    	//Edited by
+    	//https://stackoverflow.com/users/184746/caesay
+    	//https://stackoverflow.com/users/432294/jay-sullivan
+    	//https://stackoverflow.com/users/57611/erike
+    	
+    	try (FileOutputStream o = new FileOutputStream("./" + fileName)) {
+    		o.write(b);
+    		o.close();
+    	} catch (IOException e) {
+    		System.out.println("Error when writing to file");
+    	}
+    	
+    }
     
     private static boolean isHeader(DatagramPacket p) {
     	
