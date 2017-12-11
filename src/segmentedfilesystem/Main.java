@@ -1,10 +1,18 @@
 package segmentedfilesystem;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import static java.nio.file.StandardOpenOption.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
+
+import org.omg.CORBA.portable.OutputStream;
+
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -17,7 +25,8 @@ import java.net.UnknownHostException;
 public class Main {
 
     public static void main(String[] args) throws UnknownHostException, SocketException {
-
+    	
+    	// Setup the DatagramSocket and connect to the file server
     	InetAddress target = InetAddress.getByName("146.57.33.55");
     	int server_port = 6014;
     	DatagramSocket socket = new DatagramSocket();
@@ -32,8 +41,8 @@ public class Main {
     		System.out.println("IOException when starting connection");
 
     	}
-    	
-    	byte[] buf = new byte[256];
+    	// Declare a buffer to store the data from the packet we receive
+    	byte[] buf = new byte[1028];
 
     	DatagramPacket p = new DatagramPacket(buf, buf.length);
     	try {
@@ -60,8 +69,6 @@ public class Main {
     				for (int i = 2; i < testb.length; i++) {
     					testb[i - 2] = p.getData()[i];
     				}
-    				System.out.println(new String(testb));
-    				System.out.println("^ is header filename");
     				headerCount++;
     				packetCount++;
     			}
@@ -74,11 +81,12 @@ public class Main {
     			}
 
     		}
+    		// Make sure that we have seen all the header, footer, and data packets.
     		if ((headerCount == footerCount) && (footerCount == IDArray.size()) && (packetCount == packetArray.size())) {
     			break;
     		}
     		try {
-    			buf = new byte[256];
+    			buf = new byte[1028];
     			p = new DatagramPacket(buf, buf.length);
     			socket.receive(p);
     		} catch (IOException e) {
@@ -86,10 +94,12 @@ public class Main {
     		}
     	}
     	
+    	// Filter the packets, assemble the file byte arrays, and sort them.
     	filterData(packetArray);
     	ArrayList<ArrayList<DatagramPacket>> assembledFiles = assembleFiles(packetArray, headerArray);
     	sortFiles(assembledFiles);
-
+    	
+    	// Write each file
     	for (int i = 0; i < assembledFiles.size(); i++) {
     		writeFile(assembledFiles.get(i), headerArray.get(i));
     	}
@@ -97,6 +107,11 @@ public class Main {
     	
     }
 
+    /* Public methods that use the class TestPacket to mimic the structure of data
+    / of DatagramPacket for testing. These methods are public so that main can
+    / make use of them during testing.
+    */
+    
     public boolean isHeader(byte[] packetData) {
     	byte statusByte = packetData[0];
 
@@ -164,6 +179,7 @@ public class Main {
     	return assembledFiles;
     }
 
+    // filters out the header packets from the data packets 
     private static void filterData(ArrayList<DatagramPacket> data) {
     	
     	Iterator<DatagramPacket> packetIter = data.listIterator();
@@ -175,7 +191,8 @@ public class Main {
     	}
     	filteredData = data;
     }
-
+    
+    // Writes and returns, in un-sorted order, lists of datagram packets associated to each unique fileID. 
     private static ArrayList<ArrayList<DatagramPacket>> assembleFiles(ArrayList<DatagramPacket> data, ArrayList<DatagramPacket> files) {
     	ArrayList<ArrayList<DatagramPacket>> assembledFiles = new ArrayList<>();
     	for (int i = 0; i < files.size(); i++) {
@@ -190,26 +207,25 @@ public class Main {
     	}
     	return assembledFiles;
     }
-
-    private static ArrayList<ArrayList<DatagramPacket>> sortFiles(ArrayList<ArrayList<DatagramPacket>> assembledFiles) {
-    	ArrayList<ArrayList<DatagramPacket>> sortedFiles = new ArrayList<>();
+    
+    // Sorts the order of the packets based on their packet number using a DatagramPacketComparator
+    private static void sortFiles(ArrayList<ArrayList<DatagramPacket>> assembledFiles) {
     	for (ArrayList<DatagramPacket> currentFile : assembledFiles) {
     		Collections.sort(currentFile, new DatagramPacketComparator());
     	}
-    	return sortedFiles;
     }
-    
-    private static void writeFile(ArrayList<DatagramPacket> file, DatagramPacket header) {
+    // Write the sorted DatagramPacket arrays to their respective filename
+    private static void writeFile(ArrayList<DatagramPacket> fileData, DatagramPacket header) {
     	ArrayList<Byte> byteList = new ArrayList<Byte>();
     	ArrayList<Byte> fileNameByteList = new ArrayList<Byte>();
 
-    	for (DatagramPacket p : file) {
-    		for (int i = 4; i < p.getData().length; i++) {
+    	for (DatagramPacket p : fileData) {
+    		for (int i = 4; i < p.getLength(); i++) {
     			byteList.add(p.getData()[i]);
     		}
     	}
 
-    	for (int i = 2; i < header.getData().length; i++) {
+    	for (int i = 2; i < header.getLength(); i++) {
     		fileNameByteList.add(header.getData()[i]);
     	}
 
@@ -226,44 +242,23 @@ public class Main {
 
 
     	String fileName = new String(h);
-    	System.out.println("File name is:" + fileName);
+    	
+    	//Template used for creating/writing to files:
+    	//https://docs.oracle.com/javase/tutorial/essential/io/file.html
+    	//Note: This only works if the files do not exist. Manually delete these files after each run
 
-    	//Credit for this file to StackOverflow question
-    	//https://stackoverflow.com/questions/4350084/byte-to-file-in-java
-    	//Asker
-    	//https://stackoverflow.com/users/432539/elcool
-    	//Edited by
-    	//https://stackoverflow.com/users/2598/jjnguy
-    	//Answerer
-    	//https://stackoverflow.com/users/131433/bmargulies
-    	//Edited by
-    	//https://stackoverflow.com/users/184746/caesay
-    	//https://stackoverflow.com/users/432294/jay-sullivan
-    	//https://stackoverflow.com/users/57611/erike
-
-    	//FileUtils.writeByteArrayToFile(new File("/" + fileName), myByteArray);
-    	
-    	File file0 = new File("src/" + fileName);
-    	System.out.println(file0.getAbsolutePath());
-    	
-    	try {
-    	if (!file0.exists()) {
-    		file0.createNewFile();
-    	}
+    	String pathName = "./"+fileName.trim();
+    	Path path = Paths.get("./"+fileName);
+    	try(BufferedOutputStream out = new BufferedOutputStream(
+    			Files.newOutputStream(path,CREATE))) {
+    			out.write(b);
     	} catch (IOException e) {
-    		System.out.println("God fucking damnit");
-    	}
-    	
-    	try (FileOutputStream o = new FileOutputStream(file0.getAbsolutePath())) {
-    		o.write(b);
-    		o.close();
-    	} catch (IOException e) {
-    		System.out.println("Error when writing to file");
     		e.printStackTrace();
     	}
 
     }
     
+    // Check if the given Datagram Packet is a header
     private static boolean isHeader(DatagramPacket p) {
 
     	byte[] b = p.getData();
@@ -279,7 +274,8 @@ public class Main {
 
 
     }
-
+    
+    // Check if the given Datagram Packet is a footer
     private static boolean isFooter(DatagramPacket p) {
 
     	byte[] b = p.getData();
@@ -293,12 +289,15 @@ public class Main {
     	return false;
 
     }
-
+    
+    // Get the int value of the 3rd and 4th bytes of the DatagramPacket
+    // ByteBuffer.wrap().getInt() requires a minimum of 4 bytes,
+    // so prefix the int with two zero-valued bytes.
     private static int getPacketNumber(DatagramPacket p) {
 
     	byte[] packetNumber = new byte[4];
     	byte[] b = p.getData();
-      packetNumber[0] = (byte)0;
+    	packetNumber[0] = (byte)0;
     	packetNumber[1] = (byte)0;
     	packetNumber[2] = b[2];
     	packetNumber[3] = b[3];
@@ -307,19 +306,22 @@ public class Main {
 
 
     }
-
+    
+    // Get the fileID from the 2nd byte of the packet.
     private static int getFileID(DatagramPacket p){
 
     	byte[] packetNumber = new byte[4];
     	byte[] b = p.getData();
-      packetNumber[0] = (byte)0;
+    	packetNumber[0] = (byte)0;
     	packetNumber[1] = (byte)0;
     	packetNumber[1] = (byte)0;
     	packetNumber[3] = b[1];
 
     	return ByteBuffer.wrap(packetNumber).getInt();
     }
-
+    
+    // DatagramPacketComparator is used by the method sortFiles()
+    // Compares DatagramPackets based on their packet number value
 	private static class DatagramPacketComparator implements Comparator<DatagramPacket> {
 
 		public DatagramPacketComparator(){
@@ -346,7 +348,4 @@ public class Main {
 		}
 
 	}
-
-	
-
 }
